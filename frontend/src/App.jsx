@@ -422,9 +422,10 @@ export default function App() {
           <button onClick={logout}>↪ &nbsp; Logout</button>
         </nav>
         <div className="sidebar-bottom">
-          <span className="online-dot"></span> {faculty ? "Faculty" : "Student"} Session
-          <small>FSD Lab · Experiment 10</small>
-        </div>
+  <span className="online-dot"></span>
+  {faculty ? "Faculty" : "Student"} Session
+  <small>Campus Placement Management Portal</small>
+</div>
       </aside>
 
       <main className="main">
