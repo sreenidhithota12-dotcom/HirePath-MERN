@@ -20,7 +20,7 @@ app.use(cors({
     "http://localhost:5173",
     "http://localhost:5174",
     "https://placeready-frontend.vercel.app",
-    "https://hirepath-frontend.vercel.app"
+    "https://hirepath-frontend.vercel.app",
     "https://alarming-casket-4jp9v6xxj475hq6qj-5173.app.github.dev"
   ],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
