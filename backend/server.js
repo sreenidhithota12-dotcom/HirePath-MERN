@@ -16,7 +16,9 @@ const app = express();
 app.use(cors({
   origin: [
     "http://localhost:5173",
-    "https://placeready-frontend.vercel.app"
+    "http://localhost:5174",
+    "https://placeready-frontend.vercel.app",
+    "https://alarming-casket-4jp9v6xxj475hq6qj-5173.app.github.dev"
   ],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]

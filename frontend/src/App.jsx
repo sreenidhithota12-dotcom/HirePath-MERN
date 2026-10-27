@@ -1,8 +1,9 @@
 
 import { useEffect, useState } from "react";
 import "./App.css";
+import "./Assessment.css";
 
-const API = `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api`;
+const API = `${import.meta.env.VITE_API_URL ?? ""}/api`;
 const BRANCHES = ["CSE", "CSM", "CSD", "IT", "ECE", "EEE", "MECH", "CIVIL"];
 
 const blankStudent = {
@@ -737,7 +738,7 @@ export default function App() {
         )}
 
         {!faculty && page === "assessment" && (
-          <div className="panel">
+          <div className="panel assessment-panel">
             <div className="panel-heading">
               <h2>Technical Readiness Assessment</h2>
               <p>Answer each question. The backend grades and saves your results.</p>
@@ -761,14 +762,24 @@ export default function App() {
                 </div>
               </div>
             ) : !assessmentBusy && questions.length > 0 ? (
-              <form onSubmit={submitAssessment}>
+              <form onSubmit={submitAssessment} className="assessment-form">
+                <div className="assessment-progress">
+                  <div className="assessment-progress-heading">
+                    <strong>Assessment progress</strong>
+                    <span>{Object.keys(answers).length} / {questions.length} answered</span>
+                  </div>
+                  <div className="assessment-progress-track">
+                    <div className="assessment-progress-fill" style={{width: `${(Object.keys(answers).length / questions.length) * 100}%`}} />
+                  </div>
+                </div>
                 {questions.map((q, index) => (
-                  <fieldset key={q.id} style={{border:"1px solid #d8dce7", borderRadius:12, padding:16, marginBottom:16}}>
-                    <legend style={{fontWeight:600, padding:"0 6px"}}>
-                      {index + 1}. {q.topic} — {q.question}
+                  <fieldset key={q.id} className="assessment-question">
+                    <legend>
+                      <span className="assessment-topic">{q.topic}</span> {index + 1}. {q.question}
                     </legend>
+                    <div className="assessment-options">
                     {q.options.map((option, optionIndex) => (
-                      <label key={optionIndex} style={{display:"flex",alignItems:"center",gap:10,margin:"10px 0",cursor:"pointer"}}>
+                      <label key={optionIndex} className={`assessment-option ${answers[q.id] === optionIndex ? "is-selected" : ""}`}>
                         <input
                           type="radio"
                           name={`question-${q.id}`}
@@ -776,12 +787,12 @@ export default function App() {
                           checked={answers[q.id] === optionIndex}
                           onChange={() => setAnswers(prev => ({ ...prev, [q.id]: optionIndex }))}
                         />
-                        {option}
+                        <span>{option}</span>
                       </label>
                     ))}
+                    </div>
                   </fieldset>
                 ))}
-                <p>{Object.keys(answers).length} of {questions.length} answered</p>
                 <div className="form-actions">
                   <button className="primary-btn" type="submit"
                     disabled={assessmentBusy || Object.keys(answers).length !== questions.length}>
