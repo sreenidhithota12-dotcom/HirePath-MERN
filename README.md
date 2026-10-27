@@ -1,4 +1,4 @@
-# 🎓 PlaceReady – Campus Placement Management Portal
+# 🎓 # HirePath — Placement Readiness & Recruitment Platform
 
 **A full-stack MERN application for managing campus placement opportunities, student profiles, and recruitment eligibility.**
 
