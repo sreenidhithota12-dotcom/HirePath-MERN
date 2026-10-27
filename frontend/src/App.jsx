@@ -274,7 +274,7 @@ export default function App() {
       <div className="auth-page">
         <div className="auth-intro">
           <div className="auth-logo">P</div>
-          <h1>PlaceReady</h1>
+          <h1>HirePath</h1>
           <p>Your campus placement management portal.</p>
           <div className="auth-feature">✓ Secure role-based login</div>
           <div className="auth-feature">✓ Live placement drive updates</div>
@@ -392,7 +392,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-icon">P</div>
-          <div><h2>PlaceReady</h2><small>{faculty ? "Faculty Portal" : "Student Portal"}</small></div>
+          <div><h2>HirePath</h2><small>{faculty ? "Faculty Portal" : "Student Portal"}</small></div>
         </div>
         <div className="menu-label">WORKSPACE</div>
         <nav>
@@ -717,7 +717,7 @@ export default function App() {
           </div>
         )}
 
-        <footer>PlaceReady © 2026 · Campus Placement Management System</footer>
+        <footer>HirePath © 2026 · Campus Placement Management System</footer>
       </main>
     </div>
   );
