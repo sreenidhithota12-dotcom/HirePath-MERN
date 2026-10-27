@@ -33,7 +33,12 @@ async function api(path, method = "GET", body = null, token = "") {
   if (!res.ok) throw new Error(data.message || "Request failed");
   return data;
 }
-
+function formatJobDescription(description = "") {
+  return description
+    .replace(/\*\*/g, "")
+    .replace(/\s+-\s+/g, "\n• ")
+    .trim();
+}
 export default function App() {
   const [token, setToken] = useState(sessionStorage.getItem("token") || "");
   const [role, setRole] = useState(sessionStorage.getItem("role") || "student");
@@ -43,14 +48,21 @@ export default function App() {
   const [form, setForm] = useState(blankStudent);
   const [companyForm, setCompanyForm] = useState(blankCompany);
   const [companies, setCompanies] = useState([]);
+  const [selectedCompany, setSelectedCompany] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [skillAnalysis, setSkillAnalysis] = useState(null);
   const [skillLoading, setSkillLoading] = useState(false);
+  const [selectedRoadmapCompany, setSelectedRoadmapCompany] = useState("");
+  const [roadmap, setRoadmap] = useState(null);
+  const [roadmapLoading, setRoadmapLoading] = useState(false);
+  const [roadmapSaving, setRoadmapSaving] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
+  const [analyticsHistory, setAnalyticsHistory] = useState([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [assessmentHistory, setAssessmentHistory] = useState([]);
   const [assessmentBusy, setAssessmentBusy] = useState(false);
   const [assessmentResult, setAssessmentResult] = useState(null);
@@ -333,6 +345,82 @@ export default function App() {
       setSkillLoading(false);
     }
   };
+
+
+  const loadRoadmap = async (companyId, silent = false) => {
+    if (!companyId) {
+      setRoadmap(null);
+      return;
+    }
+
+    if (!silent) {
+      setRoadmapLoading(true);
+      setRoadmap(null);
+    }
+
+    try {
+      const data = await api(
+        `/roadmap/${companyId}`,
+        "GET",
+        null,
+        token
+      );
+
+      setRoadmap(data);
+    } catch (err) {
+      notify("", err.message);
+    } finally {
+      if (!silent) {
+        setRoadmapLoading(false);
+      }
+    }
+  };
+
+
+
+  const updateRoadmapTask = async (taskId, completed) => {
+    if (!selectedRoadmapCompany || roadmapSaving) return;
+
+    setRoadmapSaving(true);
+
+    try {
+      await api(
+        `/roadmap/${selectedRoadmapCompany}/progress`,
+        "PATCH",
+        { taskId, completed },
+        token
+      );
+
+      await loadRoadmap(selectedRoadmapCompany, true);
+    } catch (err) {
+      notify("", err.message);
+    } finally {
+      setRoadmapSaving(false);
+    }
+  };
+
+  const loadAnalytics = async () => {
+    setAnalyticsLoading(true);
+
+    try {
+      const data = await api(
+        "/assessments/history",
+        "GET",
+        null,
+        token
+      );
+
+      setAnalyticsHistory(
+        Array.isArray(data) ? data : []
+      );
+    } catch (err) {
+      notify("", err.message);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+
   const openPage = next => {
     setPage(next);
     notify();
@@ -343,6 +431,10 @@ export default function App() {
 
     if (next === "skillAnalysis") {
       loadSkillAnalysis();
+
+    }
+    if (next === "analytics") {
+      loadAnalytics();
     }
   };
 
@@ -473,6 +565,8 @@ export default function App() {
     eligibility: "Placement Opportunities",
     profile: "Edit My Profile",
     skillAnalysis: "Company-Specific Skill Gap Analysis",
+    roadmap: "Personalized Preparation Roadmap",
+    analytics: "Performance Analytics",
     assessment: "Technical Assessment",
     performance: "My Performance"
   };
@@ -509,6 +603,18 @@ export default function App() {
                 onClick={() => openPage("skillAnalysis")}
               >
                 ◈ &nbsp; Skill Gap Analysis
+              </button>
+              <button
+                className={page === "roadmap" ? "active" : ""}
+                onClick={() => openPage("roadmap")}
+              >
+                ◈ &nbsp; Preparation Roadmap
+              </button>
+              <button
+                className={page === "analytics" ? "active" : ""}
+                onClick={() => openPage("analytics")}
+              >
+                ◫ &nbsp; Performance Analytics
               </button>
               <button className={page === "assessment" ? "active" : ""}
                 onClick={() => openPage("assessment")}>▤ &nbsp; Take Assessment</button>
@@ -803,11 +909,28 @@ export default function App() {
 
             <div className="company-grid">
               {companies.map(c => (
-                <div className="company-card" key={c._id}>
+                <div
+                  className="company-card clickable-company"
+                  key={c._id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`View details for ${c.name}`}
+                  onClick={() => setSelectedCompany(c)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedCompany(c);
+                    }
+                  }}
+                >
                   <div className="company-logo">{c.name.charAt(0)}</div>
                   <h3>{c.name}</h3>
                   <p><strong>{c.role}</strong></p>
-                  <p>{c.description}</p>
+                  <p className="company-preview">
+                    {c.description?.length > 125
+                      ? `${c.description.slice(0, 125)}...`
+                      : c.description}
+                  </p>
                   <p>Branches: {c.eligibleBranches.join(", ")}</p>
                   <p>Min CGPA: {c.minCGPA} · Max Backlogs: {c.maxBacklogs}</p>
                   <p>Deadline: {c.deadline}</p>
@@ -843,7 +966,105 @@ export default function App() {
               <div className="empty">No placement drives published yet.</div>}
           </div>
         )}
+        {!faculty && page === "assessment" && (
+          <div className="panel assessment-panel">
+            <div className="panel-heading">
+              <h2>Technical Readiness Assessment</h2>
+              <p>Answer each question. The backend grades and saves your results.</p>
+            </div>
+            {assessmentBusy && <p>Loading or submitting assessment...</p>}
+            {!assessmentBusy && assessmentResult ? (
+              <div>
+                <h2>Your result: {assessmentResult.overallScore}%</h2>
+                <p>{assessmentResult.correctAnswers} / {assessmentResult.totalQuestions} correct</p>
+                <div className="details-grid">
+                  {(assessmentResult.topicScores || []).map(item => (
+                    <div key={item.topic}>
+                      <span>{item.topic}</span>
+                      <strong>{item.percentage}% ({item.correct}/{item.total})</strong>
+                    </div>
+                  ))}
+                </div>
+                <div className="form-actions">
+                  <button className="secondary-btn" onClick={() => openPage("performance")}>View History</button>
+                  <button className="primary-btn" onClick={() => openPage("assessment")}>Retake Assessment</button>
+                </div>
+              </div>
+            ) : !assessmentBusy && questions.length > 0 ? (
+              <form onSubmit={submitAssessment} className="assessment-form">
+                <div className="assessment-progress">
+                  <div className="assessment-progress-heading">
+                    <strong>Assessment progress</strong>
+                    <span>{Object.keys(answers).length} / {questions.length} answered</span>
+                  </div>
+                  <div className="assessment-progress-track">
+                    <div className="assessment-progress-fill" style={{ width: `${(Object.keys(answers).length / questions.length) * 100}%` }} />
+                  </div>
+                </div>
+                {questions.map((q, index) => (
+                  <fieldset key={q.id} className="assessment-question">
+                    <legend>
+                      <span className="assessment-topic">{q.topic}</span> {index + 1}. {q.question}
+                    </legend>
+                    <div className="assessment-options">
+                      {q.options.map((option, optionIndex) => (
+                        <label key={optionIndex} className={`assessment-option ${answers[q.id] === optionIndex ? "is-selected" : ""}`}>
+                          <input
+                            type="radio"
+                            name={`question-${q.id}`}
+                            value={optionIndex}
+                            checked={answers[q.id] === optionIndex}
+                            onChange={() => setAnswers(prev => ({ ...prev, [q.id]: optionIndex }))}
+                          />
+                          <span>{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                ))}
+                <div className="form-actions">
+                  <button className="primary-btn" type="submit"
+                    disabled={assessmentBusy || Object.keys(answers).length !== questions.length}>
+                    Submit Assessment
+                  </button>
+                </div>
+              </form>
+            ) : !assessmentBusy ? (
+              <button className="secondary-btn" onClick={loadAssessmentQuestions}>Retry Loading Questions</button>
+            ) : null}
+          </div>
+        )}
 
+        {!faculty && page === "performance" && (
+          <div className="panel">
+            <div className="panel-heading records-heading">
+              <div>
+                <h2>Assessment History</h2>
+                <p>Your saved test attempts and topic-wise scores.</p>
+              </div>
+              <button className="secondary-btn" onClick={loadAssessmentHistory} disabled={assessmentBusy}>
+                Refresh
+              </button>
+            </div>
+            {assessmentBusy && <p>Loading assessment history...</p>}
+            {!assessmentBusy && assessmentHistory.length === 0 && (
+              <div className="empty">No attempts yet. Take your first assessment to see results.</div>
+            )}
+            {!assessmentBusy && assessmentHistory.map((attempt, index) => (
+              <div className="drive-card" key={attempt._id} style={{ marginBottom: 12 }}>
+                <div className="drive-info" style={{ width: "100%" }}>
+                  <h3>Attempt {assessmentHistory.length - index} — {attempt.overallScore}%</h3>
+                  <p>{new Date(attempt.createdAt).toLocaleString()} · {attempt.correctAnswers}/{attempt.totalQuestions} correct</p>
+                  <div className="skill-list">
+                    {(attempt.topicScores || []).map(item => (
+                      <span className="skill" key={item.topic}>{item.topic}: {item.percentage}%</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         {!faculty && page === "skillAnalysis" && (
           <div className="panel">
             <div className="panel-heading">
@@ -979,104 +1200,474 @@ export default function App() {
             )}
           </div>
         )}
-
-        {!faculty && page === "assessment" && (
-          <div className="panel assessment-panel">
+        {!faculty && page === "roadmap" && (
+          <div className="panel">
             <div className="panel-heading">
-              <h2>Technical Readiness Assessment</h2>
-              <p>Answer each question. The backend grades and saves your results.</p>
+              <h2>Personalized Preparation Roadmap</h2>
+              <p>
+                Select a company to generate a preparation plan
+                based on your technical assessment results.
+              </p>
             </div>
-            {assessmentBusy && <p>Loading or submitting assessment...</p>}
-            {!assessmentBusy && assessmentResult ? (
-              <div>
-                <h2>Your result: {assessmentResult.overallScore}%</h2>
-                <p>{assessmentResult.correctAnswers} / {assessmentResult.totalQuestions} correct</p>
-                <div className="details-grid">
-                  {(assessmentResult.topicScores || []).map(item => (
-                    <div key={item.topic}>
-                      <span>{item.topic}</span>
-                      <strong>{item.percentage}% ({item.correct}/{item.total})</strong>
-                    </div>
+
+            <div className="roadmap-controls">
+              <label>
+                Select Target Company
+                <select
+                  value={selectedRoadmapCompany}
+                  onChange={e => {
+                    const id = e.target.value;
+                    setSelectedRoadmapCompany(id);
+                    loadRoadmap(id);
+                  }}
+                >
+                  <option value="">Choose a company</option>
+                  {companies.map(company => (
+                    <option key={company._id} value={company._id}>
+                      {company.name} — {company.role}
+                    </option>
                   ))}
-                </div>
-                <div className="form-actions">
-                  <button className="secondary-btn" onClick={() => openPage("performance")}>View History</button>
-                  <button className="primary-btn" onClick={() => openPage("assessment")}>Retake Assessment</button>
-                </div>
+                </select>
+              </label>
+            </div>
+
+            {roadmapLoading && (
+              <div className="empty">Generating your preparation plan...</div>
+            )}
+
+            {!roadmapLoading && roadmap && !roadmap.hasAssessment && (
+              <div className="empty">
+                <h3>Assessment Required</h3>
+                <p>Complete an assessment before generating your roadmap.</p>
+                <button
+                  className="primary-btn"
+                  onClick={() => openPage("assessment")}
+                >
+                  Take Assessment
+                </button>
               </div>
-            ) : !assessmentBusy && questions.length > 0 ? (
-              <form onSubmit={submitAssessment} className="assessment-form">
-                <div className="assessment-progress">
-                  <div className="assessment-progress-heading">
-                    <strong>Assessment progress</strong>
-                    <span>{Object.keys(answers).length} / {questions.length} answered</span>
+            )}
+
+            {!roadmapLoading && roadmap?.hasAssessment && (
+              <>
+                <div className="roadmap-overview">
+                  <div>
+                    <h3>{roadmap.companyName}</h3>
+                    <p>{roadmap.role}</p>
                   </div>
-                  <div className="assessment-progress-track">
-                    <div className="assessment-progress-fill" style={{ width: `${(Object.keys(answers).length / questions.length) * 100}%` }} />
-                  </div>
+                  <span className="roadmap-score">
+                    Latest Score: {roadmap.overallScore}%
+                  </span>
                 </div>
-                {questions.map((q, index) => (
-                  <fieldset key={q.id} className="assessment-question">
-                    <legend>
-                      <span className="assessment-topic">{q.topic}</span> {index + 1}. {q.question}
-                    </legend>
-                    <div className="assessment-options">
-                      {q.options.map((option, optionIndex) => (
-                        <label key={optionIndex} className={`assessment-option ${answers[q.id] === optionIndex ? "is-selected" : ""}`}>
-                          <input
-                            type="radio"
-                            name={`question-${q.id}`}
-                            value={optionIndex}
-                            checked={answers[q.id] === optionIndex}
-                            onChange={() => setAnswers(prev => ({ ...prev, [q.id]: optionIndex }))}
-                          />
-                          <span>{option}</span>
-                        </label>
+
+                {roadmap.topics.length === 0 ? (
+                  <div className="empty">
+                    No technical requirements have been configured
+                    for this company yet.
+                  </div>
+                ) : (
+                  <>
+                    {(() => {
+                      const allTasks = roadmap.topics.flatMap(t => t.tasks);
+                      const done = allTasks.filter(t => t.completed).length;
+                      const percent = allTasks.length
+                        ? Math.round(done * 100 / allTasks.length)
+                        : 0;
+
+                      return (
+                        <div className="roadmap-progress-card">
+                          <div className="roadmap-progress-heading">
+                            <strong>Preparation Progress</strong>
+                            <span>{done}/{allTasks.length} tasks · {percent}%</span>
+                          </div>
+                          <div className="roadmap-progress-track">
+                            <div
+                              className="roadmap-progress-fill"
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    <div className="roadmap-topic-list">
+                      {roadmap.topics.map(topic => (
+                        <div className="roadmap-topic-card" key={topic.topic}>
+                          <div className="roadmap-topic-heading">
+                            <div>
+                              <h3>{topic.topic}</h3>
+                              <p>
+                                Score: {topic.score === null
+                                  ? "Not assessed" : `${topic.score}%`}
+                                {" · "}
+                                Target: {topic.target}%
+                              </p>
+                            </div>
+                            <span className={
+                              `roadmap-priority ${topic.priority === "High" ? "high" :
+                                topic.priority === "Medium" ? "medium" :
+                                  topic.priority === "Achieved" ? "achieved" : ""
+                              }`
+                            }>
+                              {topic.priority}
+                            </span>
+                          </div>
+
+                          <div className="roadmap-tasks">
+                            {topic.tasks.map(task => (
+                              <label className="roadmap-task" key={task.id}>
+                                <input
+                                  type="checkbox"
+                                  checked={task.completed}
+                                  disabled={roadmapSaving}
+                                  onChange={e =>
+                                    updateRoadmapTask(task.id, e.target.checked)
+                                  }
+                                />
+                                <span className={task.completed ? "task-done" : ""}>
+                                  {task.description}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
-                  </fieldset>
-                ))}
-                <div className="form-actions">
-                  <button className="primary-btn" type="submit"
-                    disabled={assessmentBusy || Object.keys(answers).length !== questions.length}>
-                    Submit Assessment
-                  </button>
-                </div>
-              </form>
-            ) : !assessmentBusy ? (
-              <button className="secondary-btn" onClick={loadAssessmentQuestions}>Retry Loading Questions</button>
-            ) : null}
+                  </>
+                )}
+              </>
+            )}
           </div>
         )}
 
-        {!faculty && page === "performance" && (
+        {!faculty && page === "analytics" && (
           <div className="panel">
-            <div className="panel-heading records-heading">
-              <div>
-                <h2>Assessment History</h2>
-                <p>Your saved test attempts and topic-wise scores.</p>
-              </div>
-              <button className="secondary-btn" onClick={loadAssessmentHistory} disabled={assessmentBusy}>
-                Refresh
+            <div className="panel-heading">
+              <h2>Performance Analytics</h2>
+              <p>
+                Track your technical assessment performance
+                and identify areas for improvement.
+              </p>
+            </div>
+
+            <div className="form-actions">
+              <button
+                className="secondary-btn"
+                onClick={loadAnalytics}
+                disabled={analyticsLoading}
+              >
+                {analyticsLoading ? "Loading..." : "Refresh Analytics"}
               </button>
             </div>
-            {assessmentBusy && <p>Loading assessment history...</p>}
-            {!assessmentBusy && assessmentHistory.length === 0 && (
-              <div className="empty">No attempts yet. Take your first assessment to see results.</div>
-            )}
-            {!assessmentBusy && assessmentHistory.map((attempt, index) => (
-              <div className="drive-card" key={attempt._id} style={{ marginBottom: 12 }}>
-                <div className="drive-info" style={{ width: "100%" }}>
-                  <h3>Attempt {assessmentHistory.length - index} — {attempt.overallScore}%</h3>
-                  <p>{new Date(attempt.createdAt).toLocaleString()} · {attempt.correctAnswers}/{attempt.totalQuestions} correct</p>
-                  <div className="skill-list">
-                    {(attempt.topicScores || []).map(item => (
-                      <span className="skill" key={item.topic}>{item.topic}: {item.percentage}%</span>
-                    ))}
+
+            {analyticsLoading ? (
+              <div className="empty">Loading assessment history...</div>
+            ) : analyticsHistory.length === 0 ? (
+              <div className="empty">
+                <h3>No Assessment History</h3>
+                <p>Complete an assessment to unlock analytics.</p>
+                <button
+                  className="primary-btn"
+                  onClick={() => openPage("assessment")}
+                >
+                  Take Assessment
+                </button>
+              </div>
+            ) : (() => {
+              const attempts = [...analyticsHistory].reverse();
+              const latest = analyticsHistory[0];
+              const earliest = attempts[0];
+
+              const average = Math.round(
+                attempts.reduce(
+                  (sum, a) => sum + a.overallScore, 0
+                ) / attempts.length
+              );
+
+              const improvement =
+                latest.overallScore - earliest.overallScore;
+
+              const topics = latest.topicScores || [];
+
+              const best = [...topics].sort(
+                (a, b) => b.percentage - a.percentage
+              )[0];
+
+              const weakest = [...topics].sort(
+                (a, b) => a.percentage - b.percentage
+              )[0];
+
+              return (
+                <>
+                  <div className="analytics-stats">
+                    <div className="analytics-stat">
+                      <span>Latest Score</span>
+                      <strong>{latest.overallScore}%</strong>
+                    </div>
+
+                    <div className="analytics-stat">
+                      <span>Average Score</span>
+                      <strong>{average}%</strong>
+                    </div>
+
+                    <div className="analytics-stat">
+                      <span>Assessments Taken</span>
+                      <strong>{attempts.length}</strong>
+                    </div>
+
+                    <div className="analytics-stat">
+                      <span>Score Change</span>
+                      <strong>
+                        {attempts.length < 2
+                          ? "—"
+                          : `${improvement > 0 ? "+" : ""}${improvement} pts`}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="analytics-section">
+                    <h3>Assessment Score Trend</h3>
+                    <p>Chronological order, oldest to newest</p>
+
+                    <div className="analytics-trend">
+                      {attempts.map((a, index) => (
+                        <div className="trend-row" key={a._id}>
+                          <span>Attempt {index + 1}</span>
+
+                          <div className="trend-track">
+                            <div
+                              className="trend-fill"
+                              style={{
+                                width: `${a.overallScore}%`
+                              }}
+                            />
+                          </div>
+
+                          <strong>{a.overallScore}%</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="analytics-section">
+                    <h3>Latest Topic-Wise Performance</h3>
+                    <p>Based on your most recent assessment</p>
+
+                    <div className="analytics-topics">
+                      {topics.map(topic => (
+                        <div className="topic-analysis" key={topic.topic}>
+                          <div className="topic-heading">
+                            <strong>{topic.topic}</strong>
+                            <span>
+                              {topic.percentage}%
+                              {" · "}
+                              {topic.correct}/{topic.total} correct
+                            </span>
+                          </div>
+
+                          <div className="trend-track">
+                            <div
+                              className="topic-fill"
+                              style={{
+                                width: `${topic.percentage}%`
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="analytics-insights">
+                      <div>
+                        <span>Strongest Topic</span>
+                        <strong>
+                          {best
+                            ? `${best.topic} (${best.percentage}%)`
+                            : "Unavailable"}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>Lowest Scoring Topic</span>
+                        <strong>
+                          {weakest
+                            ? `${weakest.topic} (${weakest.percentage}%)`
+                            : "Unavailable"}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="analytics-section">
+                    <h3>Assessment History</h3>
+
+                    <div className="analytics-table-wrap">
+                      <table className="analytics-table">
+                        <thead>
+                          <tr>
+                            <th>Attempt</th>
+                            <th>Date</th>
+                            <th>Correct</th>
+                            <th>Score</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {attempts.map((a, index) => (
+                            <tr key={a._id}>
+                              <td>{index + 1}</td>
+                              <td>
+                                {new Date(a.createdAt)
+                                  .toLocaleDateString()}
+                              </td>
+                              <td>
+                                {a.correctAnswers}/{a.totalQuestions}
+                              </td>
+                              <td>{a.overallScore}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
+        {!faculty && selectedCompany && (
+          <div
+            className="company-modal-overlay"
+            onClick={() => setSelectedCompany(null)}
+          >
+            <div
+              className="company-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="company-modal-title"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="company-modal-header">
+                <div className="company-logo">
+                  {selectedCompany.name.charAt(0)}
+                </div>
+
+                <button
+                  type="button"
+                  className="company-modal-close"
+                  onClick={() => setSelectedCompany(null)}
+                  aria-label="Close company details"
+                >
+                  ×
+                </button>
+              </div>
+
+              <h2 id="company-modal-title">
+                {selectedCompany.name}
+              </h2>
+              <p className="company-modal-role">
+                {selectedCompany.role}
+              </p>
+
+              <span className={
+                selectedCompany.eligible
+                  ? "status eligible"
+                  : "status ineligible"
+              }>
+                {selectedCompany.eligible
+                  ? "✓ Academically Eligible"
+                  : "✕ Not Eligible"}
+              </span>
+
+              <div className="company-modal-section">
+                <h3>Job Description</h3>
+                <p className="company-modal-description">
+                  {formatJobDescription(
+                    selectedCompany.description
+                  ) || "No description provided."}
+                </p>
+              </div>
+
+              <div className="company-modal-section">
+                <h3>Eligibility Requirements</h3>
+
+                <div className="company-modal-grid">
+                  <div>
+                    <span>Eligible Branches</span>
+                    <strong>
+                      {selectedCompany.eligibleBranches.join(", ")}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Minimum CGPA</span>
+                    <strong>{selectedCompany.minCGPA}</strong>
+                  </div>
+
+                  <div>
+                    <span>Maximum Backlogs</span>
+                    <strong>{selectedCompany.maxBacklogs}</strong>
+                  </div>
+
+                  <div>
+                    <span>Application Deadline</span>
+                    <strong>{selectedCompany.deadline}</strong>
                   </div>
                 </div>
               </div>
-            ))}
+
+              {selectedCompany.technicalRequirements?.length > 0 && (
+                <div className="company-modal-section">
+                  <h3>Technical Proficiency Targets</h3>
+
+                  <div className="company-modal-targets">
+                    {selectedCompany.technicalRequirements.map(req => (
+                      <span key={req.topic}>
+                        {req.topic}: {req.minScore}%
+                      </span>
+                    ))}
+                  </div>
+                  <p className="company-modal-note">
+                    Demo assessment targets, not official
+                    employer eligibility criteria.
+                  </p>
+                </div>
+              )}
+
+              {!selectedCompany.eligible &&
+                selectedCompany.reasons?.length > 0 && (
+                  <div className="company-modal-reasons">
+                    {selectedCompany.reasons.map((reason, i) => (
+                      <p key={i}>• {reason}</p>
+                    ))}
+                  </div>
+                )}
+
+              <div className="company-modal-footer">
+                {selectedCompany.eligible &&
+                  /^https?:\/\//i.test(
+                    selectedCompany.applicationLink || ""
+                  ) ? (
+                  <a
+                    className="apply-link"
+                    href={selectedCompany.applicationLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View Careers Website ↗
+                  </a>
+                ) : (
+                  <button
+                    className="apply-disabled"
+                    disabled
+                  >
+                    {!selectedCompany.eligible
+                      ? "Not Eligible"
+                      : "Careers Website Unavailable"}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
