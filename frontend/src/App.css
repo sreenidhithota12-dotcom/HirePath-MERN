@@ -806,3 +806,263 @@ footer {
   }
 }
 
+/* HirePath - Faculty technical requirements */
+
+.technical-requirements {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fit, minmax(200px, 1fr)
+  );
+  gap: 14px;
+  margin: 18px 0 26px;
+}
+
+.requirement-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.requirement-check {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+
+.requirement-check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.requirement-score {
+  display: flex !important;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.requirement-score input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+
+.form-help {
+  color: #64748b;
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+/* HirePath - Placement Opportunity Cards */
+
+.company-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  align-items: stretch;
+}
+
+.company-card {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 24px;
+  border: 1px solid #e3e8f2;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(24, 39, 75, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.company-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(24, 39, 75, 0.09);
+}
+
+.company-card h3 {
+  margin: 6px 0 0;
+  color: #17233c;
+  font-size: 18px;
+}
+
+.company-card p {
+  margin: 0;
+  line-height: 1.55;
+  font-size: 13px;
+  color: #65748e;
+}
+
+.company-card .company-logo {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #ede9fe;
+  color: #6750d8;
+  font-weight: 700;
+}
+
+.company-card .status {
+  align-self: flex-start;
+  margin-top: 12px;
+}
+
+.company-card .reasons {
+  padding: 12px;
+  border-radius: 10px;
+  background: #fff1f2;
+}
+
+.company-card .reasons p {
+  color: #be3345;
+}
+
+.company-card .apply-link {
+  display: block;
+  margin-top: auto;
+  padding: 13px 16px;
+  border-radius: 10px;
+  background: #6750d8;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  transition: background 0.2s ease;
+}
+
+.company-card .apply-link:hover {
+  background: #513ac4;
+}
+
+.company-card .apply-link.apply-secondary {
+  background: #f1efff;
+  color: #6750d8;
+}
+
+.company-card .application-unavailable {
+  margin-top: auto;
+  padding-top: 14px;
+  text-align: center;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+@media (max-width: 600px) {
+  .company-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .company-card {
+    padding: 18px;
+  }
+}
+.apply-disabled {
+  margin-top: auto;
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 10px;
+  background: #e5e7eb;
+  color: #64748b;
+  cursor: not-allowed;
+  font-weight: 600;
+}
+
+/* HirePath - Skill Gap Analysis */
+
+.analysis-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.skill-company-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 20px;
+  margin-top: 24px;
+}
+
+.skill-company-card {
+  padding: 22px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.skill-company-card h3 {
+  margin: 0 0 5px;
+  color: #17233c;
+}
+
+.skill-company-card > p {
+  margin: 0 0 18px;
+  color: #64748b;
+}
+
+.skill-gap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 24px;
+}
+
+.skill-gap-row {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.skill-gap-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.skill-gap-heading span {
+  color: #64748b;
+}
+
+.skill-progress {
+  height: 9px;
+  border-radius: 20px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.skill-progress-fill {
+  height: 100%;
+  border-radius: 20px;
+  transition: width 0.3s ease;
+}
+
+.skill-gap-row small {
+  color: #64748b;
+}
+
+.skill-analysis-footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.skill-analysis-footer strong {
+  color: #17233c;
+}
+
+

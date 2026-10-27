@@ -14,7 +14,9 @@ const blankStudent = {
 const blankCompany = {
   name: "", role: "", description: "",
   eligibleBranches: [], minCGPA: "", maxBacklogs: "0",
-  deadline: "", applicationLink: ""
+  deadline: "",
+  applicationLink: "",
+  technicalRequirements: []
 };
 
 async function api(path, method = "GET", body = null, token = "") {
@@ -45,6 +47,8 @@ export default function App() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [skillAnalysis, setSkillAnalysis] = useState(null);
+  const [skillLoading, setSkillLoading] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [assessmentHistory, setAssessmentHistory] = useState([]);
@@ -125,11 +129,11 @@ export default function App() {
 
       const payload = authView === "register" && role === "student"
         ? {
-            ...form,
-            cgpa: Number(form.cgpa),
-            backlogs: Number(form.backlogs),
-            skills: form.skills.split(",").map(s => s.trim()).filter(Boolean)
-          }
+          ...form,
+          cgpa: Number(form.cgpa),
+          backlogs: Number(form.backlogs),
+          skills: form.skills.split(",").map(s => s.trim()).filter(Boolean)
+        }
         : { email: form.email, password: form.password };
 
       const data = await api(path, "POST", payload);
@@ -229,7 +233,8 @@ export default function App() {
       minCGPA: String(company.minCGPA),
       maxBacklogs: String(company.maxBacklogs),
       deadline: company.deadline,
-      applicationLink: company.applicationLink || ""
+      applicationLink: company.applicationLink || "",
+      technicalRequirements: company.technicalRequirements || []
     });
     setEditingId(company._id);
     setPage("addCompany");
@@ -292,7 +297,7 @@ export default function App() {
   const submitAssessment = async e => {
     e.preventDefault();
     if (questions.length === 0 ||
-        questions.some(q => !Object.prototype.hasOwnProperty.call(answers, q.id))) {
+      questions.some(q => !Object.prototype.hasOwnProperty.call(answers, q.id))) {
       notify("", "Please answer all questions before submitting.");
       return;
     }
@@ -310,13 +315,35 @@ export default function App() {
       setAssessmentBusy(false);
     }
   };
+  const loadSkillAnalysis = async () => {
+    setSkillLoading(true);
 
+    try {
+      const data = await api(
+        "/skill-analysis",
+        "GET",
+        null,
+        token
+      );
+
+      setSkillAnalysis(data);
+    } catch (err) {
+      notify("", err.message);
+    } finally {
+      setSkillLoading(false);
+    }
+  };
   const openPage = next => {
     setPage(next);
     notify();
-    if (next === "companies" || next === "eligibility") loadCompanies();
-    if (next === "assessment") loadAssessmentQuestions();
-    if (next === "performance") loadAssessmentHistory();
+
+    if (next === "companies" || next === "eligibility") {
+      loadCompanies();
+    }
+
+    if (next === "skillAnalysis") {
+      loadSkillAnalysis();
+    }
   };
 
   const deleteAccount = async () => {
@@ -360,26 +387,26 @@ export default function App() {
               <>
                 <label>Full Name
                   <input required name="name" value={form.name}
-                    onChange={e => setForm({...form, name:e.target.value})}/>
+                    onChange={e => setForm({ ...form, name: e.target.value })} />
                 </label>
                 <label>Roll Number
                   <input required name="rollNumber" value={form.rollNumber}
-                    onChange={e => setForm({...form, rollNumber:e.target.value})}/>
+                    onChange={e => setForm({ ...form, rollNumber: e.target.value })} />
                 </label>
               </>
             )}
 
             <label>Email Address
               <input required type="email" value={form.email}
-                onChange={e => setForm({...form, email:e.target.value})}
-                placeholder="Enter email"/>
+                onChange={e => setForm({ ...form, email: e.target.value })}
+                placeholder="Enter email" />
             </label>
 
             <label>Password
               <input required type="password" value={form.password}
                 minLength={role === "student" && authView === "register" ? 8 : undefined}
-                onChange={e => setForm({...form, password:e.target.value})}
-                placeholder="Enter password"/>
+                onChange={e => setForm({ ...form, password: e.target.value })}
+                placeholder="Enter password" />
             </label>
 
             {role === "student" && authView === "register" && (
@@ -387,25 +414,25 @@ export default function App() {
                 <div className="form-grid">
                   <label>Branch
                     <select value={form.branch}
-                      onChange={e => setForm({...form, branch:e.target.value})}>
+                      onChange={e => setForm({ ...form, branch: e.target.value })}>
                       {BRANCHES.map(b => <option key={b}>{b}</option>)}
                     </select>
                   </label>
                   <label>CGPA
                     <input required type="number" min="0" max="10" step="0.01"
                       value={form.cgpa}
-                      onChange={e => setForm({...form, cgpa:e.target.value})}/>
+                      onChange={e => setForm({ ...form, cgpa: e.target.value })} />
                   </label>
                 </div>
                 <label>Active Backlogs
                   <input required type="number" min="0" step="1"
                     value={form.backlogs}
-                    onChange={e => setForm({...form, backlogs:e.target.value})}/>
+                    onChange={e => setForm({ ...form, backlogs: e.target.value })} />
                 </label>
                 <label>Technical Skills (comma separated)
                   <input value={form.skills}
-                    onChange={e => setForm({...form, skills:e.target.value})}
-                    placeholder="Java, React, Python"/>
+                    onChange={e => setForm({ ...form, skills: e.target.value })}
+                    placeholder="Java, React, Python" />
                 </label>
               </>
             )}
@@ -445,6 +472,7 @@ export default function App() {
     addCompany: editingId ? "Edit Placement Drive" : "Publish Placement Drive",
     eligibility: "Placement Opportunities",
     profile: "Edit My Profile",
+    skillAnalysis: "Company-Specific Skill Gap Analysis",
     assessment: "Technical Assessment",
     performance: "My Performance"
   };
@@ -476,6 +504,12 @@ export default function App() {
             <>
               <button className={page === "eligibility" ? "active" : ""}
                 onClick={() => openPage("eligibility")}>✓ &nbsp; Placement Opportunities</button>
+              <button
+                className={page === "skillAnalysis" ? "active" : ""}
+                onClick={() => openPage("skillAnalysis")}
+              >
+                ◈ &nbsp; Skill Gap Analysis
+              </button>
               <button className={page === "assessment" ? "active" : ""}
                 onClick={() => openPage("assessment")}>▤ &nbsp; Take Assessment</button>
               <button className={page === "performance" ? "active" : ""}
@@ -488,10 +522,10 @@ export default function App() {
           <button onClick={logout}>↪ &nbsp; Logout</button>
         </nav>
         <div className="sidebar-bottom">
-  <span className="online-dot"></span>
-  {faculty ? "Faculty" : "Student"} Session
-  <small>Placement Readiness Platform</small>
-</div>
+          <span className="online-dot"></span>
+          {faculty ? "Faculty" : "Student"} Session
+          <small>Placement Readiness Platform</small>
+        </div>
       </aside>
 
       <main className="main">
@@ -553,7 +587,7 @@ export default function App() {
                 <>
                   <div className="section-label">MY TECHNICAL SKILLS</div>
                   <div className="skill-list">
-                    {(user.skills || []).map((s,i) =>
+                    {(user.skills || []).map((s, i) =>
                       <span className="skill" key={i}>{s}</span>)}
                   </div>
                 </>
@@ -600,38 +634,101 @@ export default function App() {
               <div className="form-grid">
                 <label>Company Name *
                   <input required value={companyForm.name}
-                    onChange={e => setCompanyForm({...companyForm,name:e.target.value})}
-                    placeholder="e.g. TechNova"/>
+                    onChange={e => setCompanyForm({ ...companyForm, name: e.target.value })}
+                    placeholder="e.g. TechNova" />
                 </label>
                 <label>Job Role *
                   <input required value={companyForm.role}
-                    onChange={e => setCompanyForm({...companyForm,role:e.target.value})}
-                    placeholder="Software Developer Intern"/>
+                    onChange={e => setCompanyForm({ ...companyForm, role: e.target.value })}
+                    placeholder="Software Developer Intern" />
                 </label>
                 <label>Minimum CGPA *
                   <input required type="number" min="0" max="10" step="0.01"
                     value={companyForm.minCGPA}
-                    onChange={e => setCompanyForm({...companyForm,minCGPA:e.target.value})}/>
+                    onChange={e => setCompanyForm({ ...companyForm, minCGPA: e.target.value })} />
                 </label>
                 <label>Maximum Active Backlogs *
                   <input required type="number" min="0" step="1"
                     value={companyForm.maxBacklogs}
-                    onChange={e => setCompanyForm({...companyForm,maxBacklogs:e.target.value})}/>
+                    onChange={e => setCompanyForm({ ...companyForm, maxBacklogs: e.target.value })} />
                 </label>
                 <label>Application Deadline *
                   <input required type="date" value={companyForm.deadline}
-                    onChange={e => setCompanyForm({...companyForm,deadline:e.target.value})}/>
+                    onChange={e => setCompanyForm({ ...companyForm, deadline: e.target.value })} />
                 </label>
                 <label>Application Link
                   <input type="url" value={companyForm.applicationLink}
-                    onChange={e => setCompanyForm({...companyForm,applicationLink:e.target.value})}
-                    placeholder="https://example.com/apply"/>
+                    onChange={e => setCompanyForm({ ...companyForm, applicationLink: e.target.value })}
+                    placeholder="https://example.com/apply" />
                 </label>
                 <label className="full-width">Job Description
                   <textarea rows="3" value={companyForm.description}
-                    onChange={e => setCompanyForm({...companyForm,description:e.target.value})}
-                    placeholder="Job description and additional requirements"/>
+                    onChange={e => setCompanyForm({ ...companyForm, description: e.target.value })}
+                    placeholder="Job description and additional requirements" />
                 </label>
+              </div>
+
+              <div className="section-label">
+                TECHNICAL PROFICIENCY TARGETS
+              </div>
+
+              <p className="form-help">
+                Set minimum assessment scores for each topic.
+                Leave a topic unchecked if it is not required.
+              </p>
+
+              <div className="technical-requirements">
+                {["DSA", "OOP", "DBMS", "OS", "CN"].map(topic => {
+                  const requirement = companyForm.technicalRequirements
+                    .find(r => r.topic === topic);
+
+                  return (
+                    <div className="requirement-row" key={topic}>
+                      <label className="requirement-check">
+                        <input
+                          type="checkbox"
+                          checked={!!requirement}
+                          onChange={e => {
+                            setCompanyForm(prev => ({
+                              ...prev,
+                              technicalRequirements: e.target.checked
+                                ? [...prev.technicalRequirements,
+                                { topic, minScore: 60 }]
+                                : prev.technicalRequirements.filter(
+                                  r => r.topic !== topic
+                                )
+                            }));
+                          }}
+                        />
+                        <span>{topic}</span>
+                      </label>
+
+                      {requirement && (
+                        <label className="requirement-score">
+                          Target %
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            required
+                            value={requirement.minScore}
+                            onChange={e => {
+                              setCompanyForm(prev => ({
+                                ...prev,
+                                technicalRequirements:
+                                  prev.technicalRequirements.map(r =>
+                                    r.topic === topic
+                                      ? { ...r, minScore: e.target.value }
+                                      : r
+                                  )
+                              }));
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="section-label">ELIGIBLE BRANCHES *</div>
@@ -639,7 +736,7 @@ export default function App() {
                 {BRANCHES.map(b => (
                   <label key={b}>
                     <input type="checkbox" checked={companyForm.eligibleBranches.includes(b)}
-                      onChange={() => changeBranch(b)}/>
+                      onChange={() => changeBranch(b)} />
                     {b}
                   </label>
                 ))}
@@ -719,21 +816,167 @@ export default function App() {
                   </span>
                   {!c.eligible && c.reasons?.length > 0 && (
                     <div className="reasons">
-                      {c.reasons.map((reason,i) => <p key={i}>• {reason}</p>)}
+                      {c.reasons.map((reason, i) => <p key={i}>• {reason}</p>)}
                     </div>
                   )}
-                  {c.eligible && c.applicationLink && (
-                    <a className="apply-link" href={c.applicationLink}
-                      target="_blank" rel="noopener noreferrer">
-                      Apply Now
+
+                  {c.applicationLink && c.eligible ? (
+                    <a
+                      className="apply-link"
+                      href={c.applicationLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Apply Now ↗
                     </a>
+                  ) : (
+                    <button className="apply-disabled" disabled>
+                      {!c.eligible ? "Not Eligible to Apply" : "Application Link Unavailable"}
+                    </button>
                   )}
+
                 </div>
               ))}
             </div>
 
             {companies.length === 0 &&
               <div className="empty">No placement drives published yet.</div>}
+          </div>
+        )}
+
+        {!faculty && page === "skillAnalysis" && (
+          <div className="panel">
+            <div className="panel-heading">
+              <h2>Company-Specific Skill Gap Analysis</h2>
+              <p>
+                Compare your technical assessment performance
+                with company-specific proficiency targets.
+              </p>
+            </div>
+
+            <div className="form-actions">
+              <button
+                className="secondary-btn"
+                onClick={loadSkillAnalysis}
+                disabled={skillLoading}
+              >
+                {skillLoading ? "Analyzing..." : "Refresh Analysis"}
+              </button>
+            </div>
+
+            {skillLoading && (
+              <p>Calculating your skill gaps...</p>
+            )}
+
+            {!skillLoading && skillAnalysis?.hasAssessment === false && (
+              <div className="empty">
+                <h3>No assessment results found</h3>
+                <p>
+                  Complete a technical assessment to unlock
+                  company-specific skill gap analysis.
+                </p>
+
+                <button
+                  className="primary-btn"
+                  onClick={() => openPage("assessment")}
+                >
+                  Take Assessment
+                </button>
+              </div>
+            )}
+
+            {!skillLoading && skillAnalysis?.hasAssessment && (
+              <>
+                <div className="analysis-summary">
+                  <div className="stat-card">
+                    <span>Latest Assessment Score</span>
+                    <strong>{skillAnalysis.overallScore}%</strong>
+                  </div>
+                  <div className="stat-card">
+                    <span>Companies Analyzed</span>
+                    <strong>{skillAnalysis.companies.length}</strong>
+                  </div>
+                </div>
+
+                <div className="skill-company-grid">
+                  {skillAnalysis.companies.map(company => (
+                    <div
+                      className="skill-company-card"
+                      key={company.companyId}
+                    >
+                      <h3>{company.companyName}</h3>
+                      <p>{company.role}</p>
+
+                      {!company.requirementsConfigured ? (
+                        <div className="empty">
+                          Technical requirements not configured.
+                        </div>
+                      ) : (
+                        <>
+                          <span className={
+                            company.meetsAllTargets
+                              ? "status eligible"
+                              : "status ineligible"
+                          }>
+                            {company.meetsAllTargets
+                              ? "All targets met"
+                              : "Preparation needed"}
+                          </span>
+
+                          <div className="skill-gap-list">
+                            {company.gaps.map(gap => (
+                              <div
+                                className="skill-gap-row"
+                                key={gap.topic}
+                              >
+                                <div className="skill-gap-heading">
+                                  <strong>{gap.topic}</strong>
+                                  <span>
+                                    {gap.studentScore === null
+                                      ? "Not assessed"
+                                      : `${gap.studentScore}% / ${gap.requiredScore}%`}
+                                  </span>
+                                </div>
+
+                                <div className="skill-progress">
+                                  <div
+                                    className="skill-progress-fill"
+                                    style={{
+                                      width: `${gap.studentScore ?? 0}%`,
+                                      background:
+                                        gap.meetsTarget === true
+                                          ? "#16a34a"
+                                          : "#7c3aed"
+                                    }}
+                                  />
+                                </div>
+
+                                <small>
+                                  {gap.gap === null
+                                    ? "Assessment required"
+                                    : gap.gap === 0
+                                      ? "Target achieved"
+                                      : `${gap.gap} percentage points below target`}
+                                </small>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="skill-analysis-footer">
+                            Average measured gap:{" "}
+                            <strong>
+                              {company.averageGap === null
+                                ? "Not available"
+                                : `${company.averageGap} points`}
+                            </strong>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -769,7 +1012,7 @@ export default function App() {
                     <span>{Object.keys(answers).length} / {questions.length} answered</span>
                   </div>
                   <div className="assessment-progress-track">
-                    <div className="assessment-progress-fill" style={{width: `${(Object.keys(answers).length / questions.length) * 100}%`}} />
+                    <div className="assessment-progress-fill" style={{ width: `${(Object.keys(answers).length / questions.length) * 100}%` }} />
                   </div>
                 </div>
                 {questions.map((q, index) => (
@@ -778,18 +1021,18 @@ export default function App() {
                       <span className="assessment-topic">{q.topic}</span> {index + 1}. {q.question}
                     </legend>
                     <div className="assessment-options">
-                    {q.options.map((option, optionIndex) => (
-                      <label key={optionIndex} className={`assessment-option ${answers[q.id] === optionIndex ? "is-selected" : ""}`}>
-                        <input
-                          type="radio"
-                          name={`question-${q.id}`}
-                          value={optionIndex}
-                          checked={answers[q.id] === optionIndex}
-                          onChange={() => setAnswers(prev => ({ ...prev, [q.id]: optionIndex }))}
-                        />
-                        <span>{option}</span>
-                      </label>
-                    ))}
+                      {q.options.map((option, optionIndex) => (
+                        <label key={optionIndex} className={`assessment-option ${answers[q.id] === optionIndex ? "is-selected" : ""}`}>
+                          <input
+                            type="radio"
+                            name={`question-${q.id}`}
+                            value={optionIndex}
+                            checked={answers[q.id] === optionIndex}
+                            onChange={() => setAnswers(prev => ({ ...prev, [q.id]: optionIndex }))}
+                          />
+                          <span>{option}</span>
+                        </label>
+                      ))}
                     </div>
                   </fieldset>
                 ))}
@@ -822,8 +1065,8 @@ export default function App() {
               <div className="empty">No attempts yet. Take your first assessment to see results.</div>
             )}
             {!assessmentBusy && assessmentHistory.map((attempt, index) => (
-              <div className="drive-card" key={attempt._id} style={{marginBottom:12}}>
-                <div className="drive-info" style={{width:"100%"}}>
+              <div className="drive-card" key={attempt._id} style={{ marginBottom: 12 }}>
+                <div className="drive-info" style={{ width: "100%" }}>
                   <h3>Attempt {assessmentHistory.length - index} — {attempt.overallScore}%</h3>
                   <p>{new Date(attempt.createdAt).toLocaleString()} · {attempt.correctAnswers}/{attempt.totalQuestions} correct</p>
                   <div className="skill-list">
@@ -848,27 +1091,27 @@ export default function App() {
               <div className="form-grid">
                 <label>Full Name
                   <input required value={form.name}
-                    onChange={e => setForm({...form,name:e.target.value})}/>
+                    onChange={e => setForm({ ...form, name: e.target.value })} />
                 </label>
                 <label>Branch
                   <select value={form.branch}
-                    onChange={e => setForm({...form,branch:e.target.value})}>
+                    onChange={e => setForm({ ...form, branch: e.target.value })}>
                     {BRANCHES.map(b => <option key={b}>{b}</option>)}
                   </select>
                 </label>
                 <label>CGPA
                   <input required type="number" step="0.01" min="0" max="10"
                     value={form.cgpa}
-                    onChange={e => setForm({...form,cgpa:e.target.value})}/>
+                    onChange={e => setForm({ ...form, cgpa: e.target.value })} />
                 </label>
                 <label>Active Backlogs
                   <input required type="number" min="0" step="1"
                     value={form.backlogs}
-                    onChange={e => setForm({...form,backlogs:e.target.value})}/>
+                    onChange={e => setForm({ ...form, backlogs: e.target.value })} />
                 </label>
                 <label className="full-width">Technical Skills
                   <input value={form.skills}
-                    onChange={e => setForm({...form,skills:e.target.value})}/>
+                    onChange={e => setForm({ ...form, skills: e.target.value })} />
                 </label>
               </div>
               <div className="form-actions">

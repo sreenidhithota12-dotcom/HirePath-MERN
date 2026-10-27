@@ -11,6 +11,8 @@ const Student = require("./models/Student");
 const Faculty = require("./models/Faculty");
 const Company = require("./models/Company");
 const assessmentRoutes = require("./routes/assessment");
+const skillAnalysisRoutes = require("./routes/skillAnalysis");
+const roadmapRoutes = require("./routes/roadmap");
 
 const app = express();
 app.use(cors({
@@ -26,217 +28,219 @@ app.use(cors({
 app.use(express.json());
 
 const companies = [
-    { name: "Company A", minCGPA: 8, maxBacklogs: 0 },
-    { name: "Company B", minCGPA: 9, maxBacklogs: 0 },
-    { name: "Company C", minCGPA: 7, maxBacklogs: 0 }
+  { name: "Company A", minCGPA: 8, maxBacklogs: 0 },
+  { name: "Company B", minCGPA: 9, maxBacklogs: 0 },
+  { name: "Company C", minCGPA: 7, maxBacklogs: 0 }
 ];
 
 const publicStudent = (student) => ({
-    _id: student._id,
-    name: student.name,
-    rollNumber: student.rollNumber,
-    email: student.email,
-    branch: student.branch,
-    cgpa: student.cgpa,
-    backlogs: student.backlogs,
-    skills: student.skills
+  _id: student._id,
+  name: student.name,
+  rollNumber: student.rollNumber,
+  email: student.email,
+  branch: student.branch,
+  cgpa: student.cgpa,
+  backlogs: student.backlogs,
+  skills: student.skills
 });
 
 const createToken = (id, role = "student") =>
-    jwt.sign(
-        { id: String(id), role },
-        process.env.JWT_SECRET,
-        { expiresIn: "2h" }
-    );
+  jwt.sign(
+    { id: String(id), role },
+    process.env.JWT_SECRET,
+    { expiresIn: "2h" }
+  );
 
 async function auth(req, res, next) {
-    const header = req.headers.authorization || "";
-    const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
 
-    if (!token) {
-        return res.status(401).json({ message: "Please login first" });
+  if (!token) {
+    return res.status(401).json({ message: "Please login first" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.role !== "student") {
+      return res.status(403).json({ message: "Student access only" });
+    }
+    const student = await Student.findById(decoded.id);
+
+    if (!student) {
+      return res.status(401).json({ message: "Account not found" });
     }
 
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        if (decoded.role !== "student") {
-            return res.status(403).json({ message: "Student access only" });
-        }
-        const student = await Student.findById(decoded.id);
-
-        if (!student) {
-            return res.status(401).json({ message: "Account not found" });
-        }
-
-        req.student = student;
-        next();
-    } catch {
-        res.status(401).json({ message: "Invalid or expired session" });
-    }
+    req.student = student;
+    next();
+  } catch {
+    res.status(401).json({ message: "Invalid or expired session" });
+  }
 }
 app.use("/api/assessments", auth, assessmentRoutes);
+app.use("/api/skill-analysis", auth, skillAnalysisRoutes);
+app.use("/api/roadmap", auth, roadmapRoutes);
 async function facultyAuth(req, res, next) {
-    const header = req.headers.authorization || "";
-    const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
 
-    if (!token) {
-        return res.status(401).json({ message: "Faculty login required" });
+  if (!token) {
+    return res.status(401).json({ message: "Faculty login required" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (decoded.role !== "faculty") {
+      return res.status(403).json({ message: "Faculty access only" });
     }
 
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const faculty = await Faculty.findById(decoded.id);
 
-        if (decoded.role !== "faculty") {
-            return res.status(403).json({ message: "Faculty access only" });
-        }
-
-        const faculty = await Faculty.findById(decoded.id);
-
-        if (!faculty) {
-            return res.status(401).json({ message: "Faculty account not found" });
-        }
-
-        req.faculty = faculty;
-        next();
-    } catch {
-        res.status(401).json({ message: "Invalid or expired faculty session" });
+    if (!faculty) {
+      return res.status(401).json({ message: "Faculty account not found" });
     }
+
+    req.faculty = faculty;
+    next();
+  } catch {
+    res.status(401).json({ message: "Invalid or expired faculty session" });
+  }
 }
 
 
 app.get("/", (req, res) => {
-    res.send("PlaceReady Secure API Running");
+  res.send("PlaceReady Secure API Running");
 });
 
 app.post("/api/auth/register", async (req, res) => {
-    try {
-        const {
-            name, rollNumber, email, password,
-            branch, cgpa, backlogs, skills
-        } = req.body;
+  try {
+    const {
+      name, rollNumber, email, password,
+      branch, cgpa, backlogs, skills
+    } = req.body;
 
-        if (
-            typeof name !== "string" || !name.trim() ||
-            typeof rollNumber !== "string" || !rollNumber.trim() ||
-            typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-            typeof password !== "string" || password.length < 8 ||
-            !["CSE", "CSM", "CSD", "IT", "ECE", "EEE", "MECH", "CIVIL"].includes(branch) ||
-            cgpa === "" || cgpa === null || !Number.isFinite(Number(cgpa)) ||
-            Number(cgpa) < 0 || Number(cgpa) > 10 ||
-            !Number.isInteger(Number(backlogs)) || Number(backlogs) < 0 ||
-            !Array.isArray(skills)
-        ) {
-            return res.status(400).json({
-                message: "Enter valid registration details. Password must have at least 8 characters."
-            });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 12);
-
-        const student = await Student.create({
-            name: name.trim(),
-            rollNumber: rollNumber.trim(),
-            email: email.trim().toLowerCase(),
-            password: hashedPassword,
-            branch,
-            cgpa: Number(cgpa),
-            backlogs: Number(backlogs),
-            skills: skills.filter(s => typeof s === "string").map(s => s.trim()).filter(Boolean)
-        });
-
-        res.status(201).json({
-            token: createToken(student._id),
-            student: publicStudent(student)
-        });
-
-    } catch (error) {
-        res.status(error.code === 11000 ? 409 : 500).json({
-            message: error.code === 11000
-                ? "Email or roll number already registered"
-                : "Registration failed"
-        });
+    if (
+      typeof name !== "string" || !name.trim() ||
+      typeof rollNumber !== "string" || !rollNumber.trim() ||
+      typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      typeof password !== "string" || password.length < 8 ||
+      !["CSE", "CSM", "CSD", "IT", "ECE", "EEE", "MECH", "CIVIL"].includes(branch) ||
+      cgpa === "" || cgpa === null || !Number.isFinite(Number(cgpa)) ||
+      Number(cgpa) < 0 || Number(cgpa) > 10 ||
+      !Number.isInteger(Number(backlogs)) || Number(backlogs) < 0 ||
+      !Array.isArray(skills)
+    ) {
+      return res.status(400).json({
+        message: "Enter valid registration details. Password must have at least 8 characters."
+      });
     }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    const student = await Student.create({
+      name: name.trim(),
+      rollNumber: rollNumber.trim(),
+      email: email.trim().toLowerCase(),
+      password: hashedPassword,
+      branch,
+      cgpa: Number(cgpa),
+      backlogs: Number(backlogs),
+      skills: skills.filter(s => typeof s === "string").map(s => s.trim()).filter(Boolean)
+    });
+
+    res.status(201).json({
+      token: createToken(student._id),
+      student: publicStudent(student)
+    });
+
+  } catch (error) {
+    res.status(error.code === 11000 ? 409 : 500).json({
+      message: error.code === 11000
+        ? "Email or roll number already registered"
+        : "Registration failed"
+    });
+  }
 });
 
 app.post("/api/auth/login", async (req, res) => {
-    try {
-        const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-        if (typeof email !== "string" || typeof password !== "string") {
-            return res.status(400).json({ message: "Enter email and password" });
-        }
-
-        const student = await Student.findOne({
-            email: email.trim().toLowerCase()
-        }).select("+password");
-
-        if (!student || !student.password ||
-            !(await bcrypt.compare(password, student.password))) {
-            return res.status(401).json({ message: "Invalid email or password" });
-        }
-
-        res.json({
-            token: createToken(student._id),
-            student: publicStudent(student)
-        });
-    } catch {
-        res.status(500).json({ message: "Login failed" });
+    if (typeof email !== "string" || typeof password !== "string") {
+      return res.status(400).json({ message: "Enter email and password" });
     }
+
+    const student = await Student.findOne({
+      email: email.trim().toLowerCase()
+    }).select("+password");
+
+    if (!student || !student.password ||
+      !(await bcrypt.compare(password, student.password))) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    res.json({
+      token: createToken(student._id),
+      student: publicStudent(student)
+    });
+  } catch {
+    res.status(500).json({ message: "Login failed" });
+  }
 });
 
 app.get("/api/me", auth, (req, res) => {
-    res.json(publicStudent(req.student));
+  res.json(publicStudent(req.student));
 });
 
 app.put("/api/me", auth, async (req, res) => {
-    try {
-        const { name, branch, cgpa, backlogs, skills } = req.body;
+  try {
+    const { name, branch, cgpa, backlogs, skills } = req.body;
 
-        if (
-            typeof name !== "string" || !name.trim() ||
-            !["CSE", "CSM", "CSD", "IT", "ECE", "EEE", "MECH", "CIVIL"].includes(branch) ||
-            cgpa === "" || cgpa === null || !Number.isFinite(Number(cgpa)) ||
-            Number(cgpa) < 0 || Number(cgpa) > 10 ||
-            !Number.isInteger(Number(backlogs)) || Number(backlogs) < 0 ||
-            !Array.isArray(skills)
-        ) {
-            return res.status(400).json({ message: "Invalid profile details" });
-        }
-
-        const student = await Student.findByIdAndUpdate(
-            req.student._id,
-            {
-                name: name.trim(),
-                branch,
-                cgpa: Number(cgpa),
-                backlogs: Number(backlogs),
-                skills: skills.filter(s => typeof s === "string").map(s => s.trim()).filter(Boolean)
-            },
-            { new: true, runValidators: true }
-        );
-
-        res.json(publicStudent(student));
-    } catch {
-        res.status(400).json({ message: "Unable to update profile" });
+    if (
+      typeof name !== "string" || !name.trim() ||
+      !["CSE", "CSM", "CSD", "IT", "ECE", "EEE", "MECH", "CIVIL"].includes(branch) ||
+      cgpa === "" || cgpa === null || !Number.isFinite(Number(cgpa)) ||
+      Number(cgpa) < 0 || Number(cgpa) > 10 ||
+      !Number.isInteger(Number(backlogs)) || Number(backlogs) < 0 ||
+      !Array.isArray(skills)
+    ) {
+      return res.status(400).json({ message: "Invalid profile details" });
     }
+
+    const student = await Student.findByIdAndUpdate(
+      req.student._id,
+      {
+        name: name.trim(),
+        branch,
+        cgpa: Number(cgpa),
+        backlogs: Number(backlogs),
+        skills: skills.filter(s => typeof s === "string").map(s => s.trim()).filter(Boolean)
+      },
+      { new: true, runValidators: true }
+    );
+
+    res.json(publicStudent(student));
+  } catch {
+    res.status(400).json({ message: "Unable to update profile" });
+  }
 });
 
 app.delete("/api/me", auth, async (req, res) => {
-    await Student.findByIdAndDelete(req.student._id);
-    res.json({ message: "Account deleted" });
+  await Student.findByIdAndDelete(req.student._id);
+  res.json({ message: "Account deleted" });
 });
 
 app.get("/api/me/eligibility", auth, (req, res) => {
-    const student = req.student;
+  const student = req.student;
 
-    const results = companies.map(company => ({
-        ...company,
-        eligible:
-            student.cgpa >= company.minCGPA &&
-            student.backlogs <= company.maxBacklogs
-    }));
+  const results = companies.map(company => ({
+    ...company,
+    eligible:
+      student.cgpa >= company.minCGPA &&
+      student.backlogs <= company.maxBacklogs
+  }));
 
-    res.json(results);
+  res.json(results);
 });
 
 app.post("/api/faculty/login", async (req, res) => {
@@ -306,6 +310,31 @@ function validateCompany(body) {
   ) {
     return false;
   }
+  const requirements = body.technicalRequirements ?? [];
+
+  if (!Array.isArray(requirements)) {
+    return false;
+  }
+
+  const allowedTopics = ["DSA", "OOP", "DBMS", "OS", "CN"];
+  const seen = new Set();
+
+  for (const requirement of requirements) {
+    if (
+      !requirement ||
+      !allowedTopics.includes(requirement.topic) ||
+      seen.has(requirement.topic) ||
+      !Number.isFinite(Number(requirement.minScore)) ||
+      requirement.minScore === "" ||
+      requirement.minScore === null ||
+      Number(requirement.minScore) < 0 ||
+      Number(requirement.minScore) > 100
+    ) {
+      return false;
+    }
+
+    seen.add(requirement.topic);
+  }
   return true;
 }
 
@@ -319,7 +348,11 @@ function companyData(body) {
     minCGPA: Number(body.minCGPA),
     maxBacklogs: Number(body.maxBacklogs),
     deadline: body.deadline,
-    applicationLink: body.applicationLink || ""
+    applicationLink: body.applicationLink || "",
+    technicalRequirements: (body.technicalRequirements ?? []).map(r => ({
+      topic: r.topic,
+      minScore: Number(r.minScore)
+    }))
   };
 }
 
@@ -436,7 +469,7 @@ app.get("/api/me/drives", auth, async (req, res) => {
 
 
 if (!process.env.JWT_SECRET) {
-    throw new Error("JWT_SECRET missing from .env");
+  throw new Error("JWT_SECRET missing from .env");
 }
 
 const connectDB = mongoose.connect(process.env.MONGO_URI)
