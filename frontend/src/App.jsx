@@ -44,6 +44,11 @@ export default function App() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [questions, setQuestions] = useState([]);
+  const [answers, setAnswers] = useState({});
+  const [assessmentHistory, setAssessmentHistory] = useState([]);
+  const [assessmentBusy, setAssessmentBusy] = useState(false);
+  const [assessmentResult, setAssessmentResult] = useState(null);
 
   const notify = (success = "", failure = "") => {
     setMessage(success);
@@ -57,6 +62,10 @@ export default function App() {
     setRole("student");
     setUser(null);
     setCompanies([]);
+    setQuestions([]);
+    setAnswers({});
+    setAssessmentHistory([]);
+    setAssessmentResult(null);
     setForm(blankStudent);
     setCompanyForm(blankCompany);
     setPage("dashboard");
@@ -253,10 +262,60 @@ export default function App() {
     }));
   };
 
+  const loadAssessmentHistory = async () => {
+    try {
+      setAssessmentBusy(true);
+      const data = await api("/assessments/history", "GET", null, token);
+      setAssessmentHistory(data);
+    } catch (err) {
+      notify("", err.message);
+    } finally {
+      setAssessmentBusy(false);
+    }
+  };
+
+  const loadAssessmentQuestions = async () => {
+    try {
+      setAssessmentBusy(true);
+      const data = await api("/assessments/questions", "GET", null, token);
+      setQuestions(data);
+      setAnswers({});
+      setAssessmentResult(null);
+    } catch (err) {
+      notify("", err.message);
+    } finally {
+      setAssessmentBusy(false);
+    }
+  };
+
+  const submitAssessment = async e => {
+    e.preventDefault();
+    if (questions.length === 0 ||
+        questions.some(q => !Object.prototype.hasOwnProperty.call(answers, q.id))) {
+      notify("", "Please answer all questions before submitting.");
+      return;
+    }
+    try {
+      setAssessmentBusy(true);
+      notify();
+      const result = await api("/assessments/submit", "POST", {
+        answers: questions.map(q => ({ id: q.id, answer: answers[q.id] }))
+      }, token);
+      setAssessmentResult(result);
+      notify("Assessment submitted and saved successfully!");
+    } catch (err) {
+      notify("", err.message);
+    } finally {
+      setAssessmentBusy(false);
+    }
+  };
+
   const openPage = next => {
     setPage(next);
     notify();
     if (next === "companies" || next === "eligibility") loadCompanies();
+    if (next === "assessment") loadAssessmentQuestions();
+    if (next === "performance") loadAssessmentHistory();
   };
 
   const deleteAccount = async () => {
@@ -273,9 +332,9 @@ export default function App() {
     return (
       <div className="auth-page">
         <div className="auth-intro">
-          <div className="auth-logo">P</div>
+          <div className="auth-logo">H</div>
           <h1>HirePath</h1>
-          <p>Your campus placement management portal.</p>
+          <p>Assess your skills. Prepare for placements. Grow your career.</p>
           <div className="auth-feature">✓ Secure role-based login</div>
           <div className="auth-feature">✓ Live placement drive updates</div>
           <div className="auth-feature">✓ Personalized eligibility checking</div>
@@ -384,14 +443,16 @@ export default function App() {
     companies: "Manage Placement Drives",
     addCompany: editingId ? "Edit Placement Drive" : "Publish Placement Drive",
     eligibility: "Placement Opportunities",
-    profile: "Edit My Profile"
+    profile: "Edit My Profile",
+    assessment: "Technical Assessment",
+    performance: "My Performance"
   };
 
   return (
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-icon">P</div>
+          <div className="brand-icon">H</div>
           <div><h2>HirePath</h2><small>{faculty ? "Faculty Portal" : "Student Portal"}</small></div>
         </div>
         <div className="menu-label">WORKSPACE</div>
@@ -414,6 +475,10 @@ export default function App() {
             <>
               <button className={page === "eligibility" ? "active" : ""}
                 onClick={() => openPage("eligibility")}>✓ &nbsp; Placement Opportunities</button>
+              <button className={page === "assessment" ? "active" : ""}
+                onClick={() => openPage("assessment")}>▤ &nbsp; Take Assessment</button>
+              <button className={page === "performance" ? "active" : ""}
+                onClick={() => openPage("performance")}>▥ &nbsp; My Performance</button>
               <button className={page === "profile" ? "active" : ""}
                 onClick={editProfile}>✎ &nbsp; Edit Profile</button>
             </>
@@ -424,14 +489,14 @@ export default function App() {
         <div className="sidebar-bottom">
   <span className="online-dot"></span>
   {faculty ? "Faculty" : "Student"} Session
-  <small>Campus Placement Management Portal</small>
+  <small>Placement Readiness Platform</small>
 </div>
       </aside>
 
       <main className="main">
         <header className="topbar">
           <div>
-            <span className="eyebrow">CAMPUS PLACEMENT PORTAL</span>
+            <span className="eyebrow">HIREPATH · READINESS & RECRUITMENT</span>
             <h1>{title[page] || "Dashboard"}</h1>
             <p>Welcome, {user.name} · {faculty ? user.department : user.branch}</p>
           </div>
@@ -671,6 +736,96 @@ export default function App() {
           </div>
         )}
 
+        {!faculty && page === "assessment" && (
+          <div className="panel">
+            <div className="panel-heading">
+              <h2>Technical Readiness Assessment</h2>
+              <p>Answer each question. The backend grades and saves your results.</p>
+            </div>
+            {assessmentBusy && <p>Loading or submitting assessment...</p>}
+            {!assessmentBusy && assessmentResult ? (
+              <div>
+                <h2>Your result: {assessmentResult.overallScore}%</h2>
+                <p>{assessmentResult.correctAnswers} / {assessmentResult.totalQuestions} correct</p>
+                <div className="details-grid">
+                  {(assessmentResult.topicScores || []).map(item => (
+                    <div key={item.topic}>
+                      <span>{item.topic}</span>
+                      <strong>{item.percentage}% ({item.correct}/{item.total})</strong>
+                    </div>
+                  ))}
+                </div>
+                <div className="form-actions">
+                  <button className="secondary-btn" onClick={() => openPage("performance")}>View History</button>
+                  <button className="primary-btn" onClick={() => openPage("assessment")}>Retake Assessment</button>
+                </div>
+              </div>
+            ) : !assessmentBusy && questions.length > 0 ? (
+              <form onSubmit={submitAssessment}>
+                {questions.map((q, index) => (
+                  <fieldset key={q.id} style={{border:"1px solid #d8dce7", borderRadius:12, padding:16, marginBottom:16}}>
+                    <legend style={{fontWeight:600, padding:"0 6px"}}>
+                      {index + 1}. {q.topic} — {q.question}
+                    </legend>
+                    {q.options.map((option, optionIndex) => (
+                      <label key={optionIndex} style={{display:"flex",alignItems:"center",gap:10,margin:"10px 0",cursor:"pointer"}}>
+                        <input
+                          type="radio"
+                          name={`question-${q.id}`}
+                          value={optionIndex}
+                          checked={answers[q.id] === optionIndex}
+                          onChange={() => setAnswers(prev => ({ ...prev, [q.id]: optionIndex }))}
+                        />
+                        {option}
+                      </label>
+                    ))}
+                  </fieldset>
+                ))}
+                <p>{Object.keys(answers).length} of {questions.length} answered</p>
+                <div className="form-actions">
+                  <button className="primary-btn" type="submit"
+                    disabled={assessmentBusy || Object.keys(answers).length !== questions.length}>
+                    Submit Assessment
+                  </button>
+                </div>
+              </form>
+            ) : !assessmentBusy ? (
+              <button className="secondary-btn" onClick={loadAssessmentQuestions}>Retry Loading Questions</button>
+            ) : null}
+          </div>
+        )}
+
+        {!faculty && page === "performance" && (
+          <div className="panel">
+            <div className="panel-heading records-heading">
+              <div>
+                <h2>Assessment History</h2>
+                <p>Your saved test attempts and topic-wise scores.</p>
+              </div>
+              <button className="secondary-btn" onClick={loadAssessmentHistory} disabled={assessmentBusy}>
+                Refresh
+              </button>
+            </div>
+            {assessmentBusy && <p>Loading assessment history...</p>}
+            {!assessmentBusy && assessmentHistory.length === 0 && (
+              <div className="empty">No attempts yet. Take your first assessment to see results.</div>
+            )}
+            {!assessmentBusy && assessmentHistory.map((attempt, index) => (
+              <div className="drive-card" key={attempt._id} style={{marginBottom:12}}>
+                <div className="drive-info" style={{width:"100%"}}>
+                  <h3>Attempt {assessmentHistory.length - index} — {attempt.overallScore}%</h3>
+                  <p>{new Date(attempt.createdAt).toLocaleString()} · {attempt.correctAnswers}/{attempt.totalQuestions} correct</p>
+                  <div className="skill-list">
+                    {(attempt.topicScores || []).map(item => (
+                      <span className="skill" key={item.topic}>{item.topic}: {item.percentage}%</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {!faculty && page === "profile" && (
           <div className="panel">
             <div className="panel-heading">
@@ -717,7 +872,7 @@ export default function App() {
           </div>
         )}
 
-        <footer>HirePath © 2026 · Campus Placement Management System</footer>
+        <footer>HirePath © 2026 · Placement Readiness & Recruitment Platform</footer>
       </main>
     </div>
   );
