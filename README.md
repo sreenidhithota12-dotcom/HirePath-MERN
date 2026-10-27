@@ -339,3 +339,4 @@ PlaceReady is an academic demonstration project. Sample companies, eligibility c
 ---
 
 **Built using MongoDB, Express.js, React.js, and Node.js.**
+HirePath — Placement Readiness and Recruitment Platform
