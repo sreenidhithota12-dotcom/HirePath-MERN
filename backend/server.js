@@ -10,6 +10,7 @@ const jwt = require("jsonwebtoken");
 const Student = require("./models/Student");
 const Faculty = require("./models/Faculty");
 const Company = require("./models/Company");
+const assessmentRoutes = require("./routes/assessment");
 
 const app = express();
 app.use(cors({
@@ -71,7 +72,7 @@ async function auth(req, res, next) {
         res.status(401).json({ message: "Invalid or expired session" });
     }
 }
-
+app.use("/api/assessments", auth, assessmentRoutes);
 async function facultyAuth(req, res, next) {
     const header = req.headers.authorization || "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : null;
